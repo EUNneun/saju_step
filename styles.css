@@ -133,6 +133,23 @@ main { min-height: calc(100vh - 130px); padding: 20px 18px 104px; outline: none;
 .mastery-mini { height: 4px; margin-top: 13px; border-radius: 9px; background: var(--line); overflow: hidden; }
 .mastery-mini i { display: block; height: 100%; background: var(--primary); }
 .element-목 { color: var(--wood); }.element-화 { color: var(--fire); }.element-토 { color: var(--earth); }.element-금 { color: var(--metal); }.element-수 { color: var(--water); }
+.wheel-mode-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0 8px; }
+.wheel-mode-row > span { color: var(--muted); font-size: 12px; font-weight: 800; }
+.wheel-mode-row > div { display: flex; gap: 5px; }
+.wheel-mode { min-width: 38px; height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--muted); font-size: 11px; font-weight: 800; cursor: pointer; }
+.wheel-mode.active { border-color: var(--primary); background: var(--primary); color: white; }
+.concept-wheel { position: relative; width: min(100%, 410px); aspect-ratio: 1; margin: 3px auto 0; }
+.concept-wheel svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.concept-wheel svg circle { fill: none; stroke: #bec8c6; stroke-width: 1.2; }
+.concept-wheel svg marker path { fill: #39a993; }
+.wheel-lines { stroke: #39a993; stroke-width: .45; opacity: .88; }
+.wheel-node { position: absolute; z-index: 2; width: 58px; height: 58px; padding: 4px 2px; transform: translate(-50%,-50%); border: 3px solid var(--paper); border-radius: 50%; color: white; box-shadow: 0 4px 13px rgba(24,49,47,.14); cursor: pointer; }
+.wheel-node b { display: block; font: 22px/1.1 serif; }
+.wheel-node small { display: block; margin-top: 2px; color: inherit; font-size: 9px; font-weight: 800; }
+.element-bg-목 { background: var(--wood); }.element-bg-화 { background: var(--fire); }.element-bg-토 { background: var(--earth); }.element-bg-금 { background: var(--metal); }.element-bg-수 { background: var(--water); }
+.wheel-center { position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; display: grid; place-content: center; transform: translate(-50%,-50%); border: 1px solid var(--line); border-radius: 50%; background: rgba(255,253,250,.95); text-align: center; box-shadow: 0 5px 18px rgba(23,64,59,.08); pointer-events: none; }
+.wheel-center b { color: var(--primary); font-size: 19px; }.wheel-center small { margin-top: 2px; color: var(--muted); font-size: 9px; }
+.wheel-help { margin: 2px 4px 0; color: var(--muted); font-size: 11px; line-height: 1.55; text-align: center; }
 .detail-hero { text-align: center; padding: 24px 18px; background: linear-gradient(145deg, #edf8f4, #fffaf0); border-radius: 21px; }
 .detail-char { font: 66px/1.1 serif; }
 .detail-hero h2 { margin: 7px 0 4px; }
@@ -221,4 +238,7 @@ main { min-height: calc(100vh - 130px); padding: 20px 18px 104px; outline: none;
   .shortcut-grid { gap: 7px; }
   .field-row { grid-template-columns: 1fr; }
   .person-node { min-width: 56px; min-height: 56px; }
+  .wheel-node { width: 51px; height: 51px; border-width: 2px; }
+  .wheel-node b { font-size: 19px; }.wheel-node small { font-size: 8px; }
+  .wheel-mode-row { align-items: flex-start; flex-direction: column; }
 }

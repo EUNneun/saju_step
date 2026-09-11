@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const STORAGE_KEY = 'sajustep-state-v1';
-  const APP_VERSION = '1.1.2';
+  const APP_VERSION = '1.2.0';
   const defaultState = {
     version: APP_VERSION, xp: 0, attempts: 0, correct: 0, streak: 0,
     conceptStats: {}, recentQuestionIds: [], feedback: [], history: [], lastStudyAt: null,
@@ -11,6 +11,7 @@
   let route = 'home';
   let session = null;
   let selectedConceptCategory = 'stems';
+  const conceptRelationMode = {stems:'합', branches:'충'};
   let detail = null;
   let myView = 'summary';
   let nobleView = 'map';
@@ -212,12 +213,27 @@
   }
 
   function getConceptCollection(cat) { return SAJU[cat] || []; }
+  function conceptWheelPairs(category,mode) {
+    const tables={
+      stems:{합:[['甲','己'],['乙','庚'],['丙','辛'],['丁','壬'],['戊','癸']],충:[['甲','庚'],['乙','辛'],['丙','壬'],['丁','癸']]},
+      branches:{충:[['子','午'],['丑','未'],['寅','申'],['卯','酉'],['辰','戌'],['巳','亥']],육합:[['子','丑'],['寅','亥'],['卯','戌'],['辰','酉'],['巳','申'],['午','未']],파:[['子','酉'],['丑','辰'],['寅','亥'],['卯','午'],['巳','申'],['未','戌']],해:[['子','未'],['丑','午'],['寅','巳'],['卯','辰'],['申','亥'],['酉','戌']]}
+    };
+    return tables[category]?.[mode]||[];
+  }
+  function renderConceptWheel(category,list) {
+    const mode=conceptRelationMode[category], modes=category==='stems'?['합','충']:['충','육합','파','해'];
+    const startAngle=category==='branches'?90:-90;
+    const points=list.map((item,index)=>{const angle=(startAngle+(360/list.length)*index)*Math.PI/180;return {item,index,x:50+40*Math.cos(angle),y:50+40*Math.sin(angle)};});
+    const pointByChar=Object.fromEntries(points.map(p=>[p.item.char,p]));
+    const lines=conceptWheelPairs(category,mode).map(([a,b])=>{const p1=pointByChar[a],p2=pointByChar[b];return p1&&p2?`<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/>`:''}).join('');
+    return `<div class="wheel-mode-row"><span>${category==='stems'?'천간':'지지'} ${mode} 관계</span><div>${modes.map(x=>`<button class="wheel-mode ${x===mode?'active':''}" data-relation-mode="${x}">${x}</button>`).join('')}</div></div><div class="concept-wheel"><svg viewBox="0 0 100 100" aria-hidden="true"><defs><marker id="arrow-${category}" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 Z"/></marker></defs><circle cx="50" cy="50" r="40"/> <g class="wheel-lines" marker-start="url(#arrow-${category})" marker-end="url(#arrow-${category})">${lines}</g></svg>${points.map(p=>{const m=mastery(state.conceptStats[p.item.id]);return `<button class="wheel-node element-bg-${p.item.element}" style="left:${p.x}%;top:${p.y}%" data-concept-index="${p.index}" aria-label="${p.item.char} ${p.item.name}, 숙련도 ${m}%"><b>${p.item.char}</b><small>${p.item.name}</small></button>`}).join('')}<div class="wheel-center"><b>${mode}</b><small>${category==='stems'?'천간':'지지'} 관계</small></div></div><p class="wheel-help">글자를 누르면 오행·음양·지장간을 볼 수 있어요. 선은 현재 선택한 ${mode} 관계입니다.</p>`;
+  }
   function renderConcepts() {
-    if(detail) return renderConceptDetail();
+    if(detail!==null) return renderConceptDetail();
     const list=getConceptCollection(selectedConceptCategory);
     main.innerHTML=`<h1 class="page-title">개념 사전</h1><p class="page-desc">한자와 한글을 함께 보고, 헷갈리는 개념을 비교해 보세요.</p>
       <div class="chip-row">${SAJU.categories.map(c=>`<button class="chip ${c.id===selectedConceptCategory?'active':''}" data-concept-category="${c.id}">${c.name}</button>`).join('')}</div>
-      <div class="concept-grid">${list.map((c,i)=>{const m=mastery(state.conceptStats[c.id]);return `<button class="concept-card" data-concept-index="${i}"><span class="concept-char ${c.element?`element-${c.element}`:''}">${escapeHtml(c.char||c.name)}</span><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.polarity?`${c.polarity} · ${c.element}`:(c.relation||c.core||c.group))}</small><div class="mastery-mini"><i style="width:${m}%"></i></div></button>`}).join('')}</div>`;
+      ${!list.length?'<div class="empty">개념을 준비하고 있어요.</div>':['stems','branches'].includes(selectedConceptCategory)?renderConceptWheel(selectedConceptCategory,list):`<div class="concept-grid">${list.map((c,i)=>{const m=mastery(state.conceptStats[c.id]);return `<button class="concept-card" data-concept-index="${i}"><span class="concept-char ${c.element?`element-${c.element}`:''}">${escapeHtml(c.char||c.name)}</span><b>${escapeHtml(c.name)}</b><small>${escapeHtml(c.polarity?`${c.polarity} · ${c.element}`:(c.relation||c.core||c.group))}</small><div class="mastery-mini"><i style="width:${m}%"></i></div></button>`}).join('')}</div>`}`;
   }
   function renderConceptDetail() {
     const list=getConceptCollection(selectedConceptCategory), c=list[detail]; const stat=state.conceptStats[c.id]||{};
@@ -225,7 +241,8 @@
       selectedConceptCategory==='branches' ? `<div class="detail-section"><h3>계절과 월</h3><p>${c.season} · ${c.month}</p></div><div class="detail-section"><h3>지장간</h3><p>${c.hidden}</p></div>`:
       selectedConceptCategory==='tenGods' ? `<div class="detail-section"><h3>판단 기준</h3><p>${c.core}</p></div><div class="detail-section"><h3>해석 키워드</h3><p>${c.meaning}</p></div><div class="detail-section"><h3>비교 포인트</h3><p>${c.compare}</p></div>`:
       selectedConceptCategory==='elements' ? `<div class="detail-section"><h3>핵심 흐름</h3><p>${c.relation}</p></div><div class="detail-section"><h3>계절과 키워드</h3><p>${c.season} · ${c.keywords.join(' · ')}</p></div>`:
-      `<div class="detail-section"><h3>기본 관계</h3><p>${c.core}</p></div><div class="detail-section"><h3>해석할 때 주의</h3><p>${c.note}</p></div>`;
+      selectedConceptCategory==='relations' ? `<div class="detail-section"><h3>기본 관계</h3><p>${c.core}</p></div><div class="detail-section"><h3>해석할 때 주의</h3><p>${c.note}</p></div>`:
+      `<div class="detail-section"><h3>핵심 개념</h3><p>${c.core}</p></div><div class="detail-section"><h3>학습 포인트</h3><p>${c.note}</p></div>`;
     main.innerHTML=`<button class="icon-btn" data-action="close-detail">←</button><div class="detail-hero"><span class="detail-char ${c.element?`element-${c.element}`:''}">${escapeHtml(c.char||c.name)}</span><h2>${escapeHtml(c.name)}</h2><p>${escapeHtml(c.polarity?`${c.polarity} · ${c.element}`:(c.group||c.relation||''))}</p></div>${body}<div class="detail-section"><h3>내 학습 기록</h3><p>시도 ${stat.attempts||0} · 정답 ${stat.correct||0} · 숙련도 ${mastery(stat)}%</p></div><button class="btn btn-primary" data-action="practice-concept" data-concept="${c.id}">관련 문제 풀기</button><div class="detail-nav"><button class="btn btn-secondary" data-action="prev-concept">이전</button><button class="btn btn-secondary" data-action="next-concept">다음</button></div>`;
   }
 
@@ -261,7 +278,7 @@
       <div class="section-head"><h2>자주 헷갈리는 개념</h2></div><section class="card">${confusions.length?confusions.map(x=>`<div class="bar-label"><span>${escapeHtml(x.pair)}</span><b>${x.count}회</b></div>`).join(''):'<div class="empty">아직 뚜렷한 혼동 패턴이 없어요.</div>'}</section>`;
   }
   function conceptName(id) {
-    for(const key of ['stems','branches','tenGods','elements','relations']) { const c=SAJU[key].find(x=>x.id===id); if(c)return c.name; }
+    for(const key of ['stems','branches','tenGods','elements','relations','strengths','fortune']) { const c=SAJU[key].find(x=>x.id===id); if(c)return c.name; }
     return id;
   }
   function getConfusions() {
@@ -295,6 +312,7 @@
     const nav=e.target.closest('[data-nav]'); if(nav){setRoute(nav.dataset.nav);return;}
     const answer=e.target.closest('[data-answer]'); if(answer){answerQuestion(Number(answer.dataset.answer));return;}
     const cat=e.target.closest('[data-concept-category]'); if(cat){selectedConceptCategory=cat.dataset.conceptCategory;detail=null;render();return;}
+    const relationMode=e.target.closest('[data-relation-mode]'); if(relationMode){conceptRelationMode[selectedConceptCategory]=relationMode.dataset.relationMode;render();return;}
     const concept=e.target.closest('[data-concept-index]'); if(concept){detail=Number(concept.dataset.conceptIndex);render();return;}
     const person=e.target.closest('[data-person-id]'); if(person){selectedPersonId=person.dataset.personId;nobleView='detail';render();return;}
     const deletePerson=e.target.closest('[data-delete-person]'); if(deletePerson){const target=state.people.find(p=>p.id===deletePerson.dataset.deletePerson);if(target&&confirm(`${target.nickname} 정보를 삭제할까요?`)){state.people=state.people.filter(p=>p.id!==target.id);saveState();render();}return;}
@@ -309,7 +327,7 @@
       case 'close-detail':detail=null;render();break;
       case 'prev-concept':{const l=getConceptCollection(selectedConceptCategory);detail=(detail-1+l.length)%l.length;render();break;}
       case 'next-concept':{const l=getConceptCollection(selectedConceptCategory);detail=(detail+1)%l.length;render();break;}
-      case 'practice-concept':{const pool=SAJU.questions.filter(q=>q.conceptIds.includes(action.dataset.concept));session={questions:(pool.length?pool:SAJU.questions).slice(0,10).map(shuffleQuestion),index:0,answered:false,selected:null,correct:0,earned:0};route='study';render();break;}
+      case 'practice-concept':{const pool=SAJU.questions.filter(q=>q.conceptIds.includes(action.dataset.concept));if(!pool.length){showToast('관련 문제는 준비 중입니다');break;}session={questions:pool.slice(0,10).map(shuffleQuestion),index:0,answered:false,selected:null,correct:0,earned:0};route='study';render();break;}
       case 'login-info':showToast('Firebase 설정 후 Google 로그인을 연결할 예정입니다');break;
       case 'admin':route='admin';render();break;
       case 'open-profile-form':route='my';myView='profile-form';render();break;

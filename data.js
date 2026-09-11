@@ -58,9 +58,22 @@ const SAJU = (() => {
     { id:'hae-rel', char:'害', name:'해', core:'자미·축오·인사·묘진·신해·유술', note:'불편이나 방해의 관계로 보되 전체 원국과 함께 판단합니다.' }
   ];
 
+  const strengths = [
+    { id:'strong-weak', char:'强弱', name:'신강·신약', core:'일간이 계절과 주변 글자에서 얻는 힘을 살피는 기본 관점', note:'오행 개수만 세어 단정하지 않고 월지, 통근, 생조와 극설을 함께 확인합니다.' },
+    { id:'wolji-force', char:'月支', name:'월지와 계절', core:'태어난 달의 지지는 원국의 계절과 기본 환경을 보여줍니다.', note:'월지는 중요한 기준이지만 월지만으로 일간의 힘을 확정하지 않습니다.' },
+    { id:'root', char:'通根', name:'통근', core:'천간이 지지에서 같은 오행의 뿌리를 얻는 관계', note:'뿌리의 위치와 계절, 지장간 구성을 함께 살펴야 합니다.' }
+  ];
+
+  const fortune = [
+    { id:'daewoon', char:'大運', name:'대운', core:'약 10년 단위로 변화하는 큰 환경의 흐름', note:'대운만 따로 보지 않고 원국에 들어와 어떤 관계를 만드는지 살펴봅니다.' },
+    { id:'sewoon', char:'歲運', name:'세운', core:'해마다 들어오는 천간과 지지의 흐름', note:'특정 사건을 확정하기보다 원국과 대운에서 어떤 요소를 활성화하는지 판단합니다.' },
+    { id:'interaction', char:'作用', name:'원국과 운의 작용', core:'원국에 운의 글자가 더해질 때 생기는 생극과 합충 관계', note:'같은 운도 원국 구조에 따라 다르게 나타날 수 있습니다.' }
+  ];
+
   const categories = [
     {id:'elements', name:'음양오행'}, {id:'stems', name:'천간'}, {id:'branches', name:'지지'},
-    {id:'tenGods', name:'십성'}, {id:'relations', name:'합충형파해'}
+    {id:'tenGods', name:'십성'}, {id:'relations', name:'합충형파해'},
+    {id:'strengths', name:'신강신약'}, {id:'fortune', name:'대운/세운'}
   ];
 
   const elementFlow = { 목:'화', 화:'토', 토:'금', 금:'수', 수:'목' };
@@ -147,5 +160,5 @@ const SAJU = (() => {
   ];
   curated.forEach(q=>add({...q,options:q.options.map((x,i)=>typeof x==='string'?{text:x,why:i===q.answer?q.reason:q.compare}:x),explanation:{core:q.core,reason:q.reason,compare:q.compare}}));
 
-  return {stems,branches,tenGods,elements,relations,categories,questions,tenGod};
+  return {stems,branches,tenGods,elements,relations,strengths,fortune,categories,questions,tenGod};
 })();
