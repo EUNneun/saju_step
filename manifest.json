@@ -1,0 +1,11 @@
+{
+  "name": "SajuStep · 사주스텝",
+  "short_name": "사주스텝",
+  "description": "사주를 외우는 것이 아니라 읽을 수 있게 만드는 학습 서비스",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fffdfa",
+  "theme_color": "#0f766e",
+  "lang": "ko",
+  "icons": [{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
