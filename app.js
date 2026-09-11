@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const STORAGE_KEY = 'sajustep-state-v1';
-  const APP_VERSION = '1.1.1';
+  const APP_VERSION = '1.1.2';
   const defaultState = {
     version: APP_VERSION, xp: 0, attempts: 0, correct: 0, streak: 0,
     conceptStats: {}, recentQuestionIds: [], feedback: [], history: [], lastStudyAt: null,
@@ -54,6 +54,17 @@
   }
   function chartPillars(chart) {
     return [['시주',chart.time||'—'],['일주',chart.day],['월주',chart.month],['년주',chart.year]];
+  }
+  function ganjiKorean(value='') {
+    const readings={甲:'갑',乙:'을',丙:'병',丁:'정',戊:'무',己:'기',庚:'경',辛:'신',壬:'임',癸:'계',子:'자',丑:'축',寅:'인',卯:'묘',辰:'진',巳:'사',午:'오',未:'미',申:'신',酉:'유',戌:'술',亥:'해'};
+    if(!value||value==='—')return '출생시간 모름';
+    return [...value].map(char=>readings[char]||char).join('');
+  }
+  function formatQuestionContext(context='') {
+    return context.split('\n').map(line=>{
+      const match=line.trim().match(/^(년주|월주|일주|시주)\s+([甲乙丙丁戊己庚辛壬癸][子丑寅卯辰巳午未申酉戌亥])$/);
+      return match?`<div class="context-pillar-line"><span>${match[1]}</span><b>${match[2]}</b><small>${ganjiKorean(match[2])}</small></div>`:`<div>${escapeHtml(line)}</div>`;
+    }).join('');
   }
   function calendarLabel(value) { return value==='solar'?'양력':value==='lunarLeap'?'음력 윤달':'음력 평달'; }
   function stemInfo(char) { return SAJU.stems.find(s=>s.char===char); }
@@ -171,7 +182,7 @@
     const q=session.questions[session.index];
     main.innerHTML=`
       <div class="study-head"><button class="icon-btn" data-action="exit-study">✕</button><div class="study-progress"><i style="width:${(session.index/session.questions.length)*100}%"></i></div><span class="study-count">${session.index+1}/${session.questions.length}</span></div>
-      <section class="question"><span class="question-type">${q.type}</span><h2>${escapeHtml(q.question)}</h2>${q.context?`<div class="question-context">${escapeHtml(q.context)}</div>`:''}</section>
+      <section class="question"><span class="question-type">${q.type}</span><h2>${escapeHtml(q.question)}</h2>${q.context?`<div class="question-context">${formatQuestionContext(q.context)}</div>`:''}</section>
       <div class="options">${q.options.map((o,i)=>`<button class="option ${session.answered?(i===q.answer?'correct':i===session.selected?'wrong':''):''}" data-answer="${i}" ${session.answered?'disabled':''}><span class="option-letter">${String.fromCharCode(65+i)}</span><span>${escapeHtml(o.text)}</span></button>`).join('')}</div>
       ${session.answered?renderExplanation(q):''}`;
   }
@@ -227,8 +238,8 @@
     }
     const positions=[[29,25],[74,31],[78,67],[28,74],[19,47],[54,16],[52,84],[84,48]];
     main.innerHTML=`<div class="section-head" style="margin-top:0"><div><h1 class="page-title">내 관계지도</h1><p class="page-desc" style="margin-bottom:0">관계를 누르면 해석 근거를 볼 수 있어요.</p></div><button class="text-btn" data-action="add-person">+ 등록</button></div>
-      ${state.people.length?`<div class="map-wrap"><span class="map-axis map-axis-x"></span><span class="map-axis map-axis-y"></span><button class="person-node me"><b>나</b><small>${state.profile.chart.dayMaster}${stemInfo(state.profile.chart.dayMaster)?.element||''}</small></button>${state.people.slice(0,8).map((p,i)=>{const a=analyzePerson(p)||{tag:'확인',kind:'support'};const pos=positions[i];return `<button class="person-node ${a.kind}" style="left:${pos[0]}%;top:${pos[1]}%" data-person-id="${p.id}"><b>${escapeHtml(p.nickname)}</b><small>${a.tag}</small></button>`}).join('')}</div><div class="map-legend"><span><i class="legend-dot"></i>보완·공감</span><span><i class="legend-dot energy"></i>활력</span><span><i class="legend-dot tension"></i>긴장·조정</span></div>`:`<section class="card"><div class="empty-illustration">縁</div><div class="empty"><b>아직 등록된 사람이 없어요</b><p>가족, 친구, 연인, 동료를 직접 등록해 관계의 흐름을 살펴보세요.</p></div><button class="btn btn-primary" data-action="add-person">첫 사람 등록하기</button></section>`}
-      ${state.people.length?`<div class="section-head"><h2>등록한 사람</h2><span>${state.people.length}명</span></div><div class="person-list">${state.people.map(p=>{const a=analyzePerson(p)||{tag:'확인'};return `<div class="person-list-item"><button data-person-id="${p.id}"><b>${escapeHtml(p.nickname)} · ${escapeHtml(p.relationship)}</b><small>${p.chart.dayMaster}${stemInfo(p.chart.dayMaster)?.element||''} · ${a.tag}${p.timeUnknown?' · 출생시간 모름':''}</small></button><button class="delete-btn" data-delete-person="${p.id}" aria-label="${escapeHtml(p.nickname)} 삭제">×</button></div>`}).join('')}</div>`:''}`;
+      ${state.people.length?`<div class="map-wrap"><span class="map-axis map-axis-x"></span><span class="map-axis map-axis-y"></span><button class="person-node me"><b>나</b><small>${state.profile.chart.dayMaster} · ${stemInfo(state.profile.chart.dayMaster)?.name||''}</small></button>${state.people.slice(0,8).map((p,i)=>{const a=analyzePerson(p)||{tag:'확인',kind:'support'};const pos=positions[i];return `<button class="person-node ${a.kind}" style="left:${pos[0]}%;top:${pos[1]}%" data-person-id="${p.id}"><b>${escapeHtml(p.nickname)}</b><small>${a.tag}</small></button>`}).join('')}</div><div class="map-legend"><span><i class="legend-dot"></i>보완·공감</span><span><i class="legend-dot energy"></i>활력</span><span><i class="legend-dot tension"></i>긴장·조정</span></div>`:`<section class="card"><div class="empty-illustration">縁</div><div class="empty"><b>아직 등록된 사람이 없어요</b><p>가족, 친구, 연인, 동료를 직접 등록해 관계의 흐름을 살펴보세요.</p></div><button class="btn btn-primary" data-action="add-person">첫 사람 등록하기</button></section>`}
+      ${state.people.length?`<div class="section-head"><h2>등록한 사람</h2><span>${state.people.length}명</span></div><div class="person-list">${state.people.map(p=>{const a=analyzePerson(p)||{tag:'확인'};return `<div class="person-list-item"><button data-person-id="${p.id}"><b>${escapeHtml(p.nickname)} · ${escapeHtml(p.relationship)}</b><small>${p.chart.dayMaster} ${stemInfo(p.chart.dayMaster)?.name||''} · ${a.tag}${p.timeUnknown?' · 출생시간 모름':''}</small></button><button class="delete-btn" data-delete-person="${p.id}" aria-label="${escapeHtml(p.nickname)} 삭제">×</button></div>`}).join('')}</div>`:''}`;
   }
   function renderPersonForm() {
     main.innerHTML=`<button class="icon-btn" data-action="close-person-form">←</button><h1 class="page-title" style="margin-top:16px">주변 사람 등록</h1><p class="page-desc">상대방의 회원가입 없이 별명과 출생정보를 직접 입력합니다.</p>
@@ -237,7 +248,7 @@
   function renderPersonDetail() {
     const person=state.people.find(p=>p.id===selectedPersonId); if(!person){nobleView='map';return renderNoble();}
     const a=analyzePerson(person); const relationText=a.relations.length?a.relations.map(r=>`${r.pair} ${r.name}`).join(', '):'두 원국 사이에서 기본 합·충·파·해가 두드러지지 않습니다.';
-    main.innerHTML=`<button class="icon-btn" data-action="back-to-map">←</button><div class="relation-hero" style="margin-top:14px"><strong>${person.chart.day}</strong><h2>${escapeHtml(person.nickname)} · ${escapeHtml(person.relationship)}</h2><p>나 ${state.profile.chart.dayMaster}${a.me.element} ↔ ${escapeHtml(person.nickname)} ${person.chart.dayMaster}${a.target.element}${person.timeUnknown?' · 출생시간 미입력':''}</p></div><section class="relation-section"><h3>${a.tag} 관계의 기본 흐름</h3><p>${a.text}</p></section><section class="relation-section"><h3>지지에서 찾은 관계</h3><p>${relationText}</p></section><section class="relation-section"><h3>해석할 때 주의</h3><p>한 가지 합이나 충만으로 좋은 인연 또는 나쁜 인연을 단정하지 않습니다. 두 원국 전체와 실제 관계 경험을 함께 살펴야 합니다.</p></section><div class="form-note" style="margin:14px 0">이 결과는 명리학 학습을 위한 관계 해석이며 상대의 성격이나 관계의 미래를 확정하지 않습니다.</div><button class="btn btn-secondary" data-action="back-to-map">지도로 돌아가기</button>`;
+    main.innerHTML=`<button class="icon-btn" data-action="back-to-map">←</button><div class="relation-hero" style="margin-top:14px"><strong>${person.chart.day}</strong><span class="ganji-reading">${ganjiKorean(person.chart.day)}</span><h2>${escapeHtml(person.nickname)} · ${escapeHtml(person.relationship)}</h2><p>나 ${state.profile.chart.dayMaster} ${a.me.name} ↔ ${escapeHtml(person.nickname)} ${person.chart.dayMaster} ${a.target.name}${person.timeUnknown?' · 출생시간 미입력':''}</p></div><section class="relation-section"><h3>${a.tag} 관계의 기본 흐름</h3><p>${a.text}</p></section><section class="relation-section"><h3>지지에서 찾은 관계</h3><p>${relationText}</p></section><section class="relation-section"><h3>해석할 때 주의</h3><p>한 가지 합이나 충만으로 좋은 인연 또는 나쁜 인연을 단정하지 않습니다. 두 원국 전체와 실제 관계 경험을 함께 살펴야 합니다.</p></section><div class="form-note" style="margin:14px 0">이 결과는 명리학 학습을 위한 관계 해석이며 상대의 성격이나 관계의 미래를 확정하지 않습니다.</div><button class="btn btn-secondary" data-action="back-to-map">지도로 돌아가기</button>`;
   }
 
   function renderReport() {
@@ -261,7 +272,7 @@
     if(myView==='profile-form')return renderProfileForm();
     const profile=state.profile;
     main.innerHTML=`<h1 class="page-title">마이</h1><p class="page-desc">내 사주정보와 학습 기록을 관리합니다.</p>
-      ${profile?.chart?`<section class="card profile-card"><div class="profile-head"><div><p class="eyebrow">내 사주정보</p><h2>${escapeHtml(profile.nickname)}</h2><p>${escapeHtml(profile.birthDate)} · ${calendarLabel(profile.calendar)}${profile.timeUnknown?' · 출생시간 모름':` · ${profile.birthTime}`}</p></div><button class="text-btn" data-action="open-profile-form">수정</button></div><div class="pillars">${chartPillars(profile.chart).map(x=>`<div class="pillar"><small>${x[0]}</small><b>${x[1]}</b></div>`).join('')}</div></section>`:`<section class="card profile-card"><p class="eyebrow">내 사주정보</p><h2 style="margin:0 0 7px;font-size:19px">관계 분석의 기준을 등록해요</h2><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.6">생년월일과 출생시간을 입력하면 내 원국을 계산하고 관계지도에 활용합니다.</p><button class="btn btn-primary" style="margin-top:16px" data-action="open-profile-form">내 사주정보 등록</button></section>`}
+      ${profile?.chart?`<section class="card profile-card"><div class="profile-head"><div><p class="eyebrow">내 사주정보</p><h2>${escapeHtml(profile.nickname)}</h2><p>${escapeHtml(profile.birthDate)} · ${calendarLabel(profile.calendar)}${profile.timeUnknown?' · 출생시간 모름':` · ${profile.birthTime}`}</p></div><button class="text-btn" data-action="open-profile-form">수정</button></div><div class="pillars">${chartPillars(profile.chart).map(x=>`<div class="pillar"><small>${x[0]}</small><b>${x[1]}</b><em>${ganjiKorean(x[1])}</em></div>`).join('')}</div></section>`:`<section class="card profile-card"><p class="eyebrow">내 사주정보</p><h2 style="margin:0 0 7px;font-size:19px">관계 분석의 기준을 등록해요</h2><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.6">생년월일과 출생시간을 입력하면 내 원국을 계산하고 관계지도에 활용합니다.</p><button class="btn btn-primary" style="margin-top:16px" data-action="open-profile-form">내 사주정보 등록</button></section>`}
       <section class="card"><p class="eyebrow">게스트 학습 중</p><h2 style="margin:0 0 7px;font-size:19px">로그인 없이 바로 배워요</h2><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.6">Google 로그인과 기기 간 동기화는 Firebase 연결 후 제공될 예정입니다.</p><button class="btn btn-secondary" style="margin-top:16px" data-action="login-info">Google로 계속하기</button></section>
       <div class="section-head"><h2>학습 정보</h2></div><div class="list-card"><div class="list-row"><div><b>누적 XP</b><small>정답 10 XP · 오답도 학습 2 XP</small></div><b>${state.xp}</b></div><div class="list-row"><div><b>최근 학습</b><small>${state.lastStudyAt?new Date(state.lastStudyAt).toLocaleDateString('ko-KR'):'아직 기록 없음'}</small></div></div><button class="list-row" data-action="admin"><div><b>관리자 피드백 보기</b><small>현재 기기에 누적된 해설 평가</small></div><span>›</span></button></div>
       <div class="section-head"><h2>데이터</h2></div><div class="list-card"><button class="list-row" data-action="reset"><div><b>학습 기록 초기화</b><small>이 기기의 모든 학습 기록 삭제</small></div><span>›</span></button></div><p style="text-align:center;color:var(--muted);font-size:10px;margin-top:18px">SajuStep v${APP_VERSION}</p>`;
