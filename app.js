@@ -1,16 +1,20 @@
 (() => {
   'use strict';
   const STORAGE_KEY = 'sajustep-state-v1';
-  const APP_VERSION = '1.0.0';
+  const APP_VERSION = '1.1.0';
   const defaultState = {
     version: APP_VERSION, xp: 0, attempts: 0, correct: 0, streak: 0,
-    conceptStats: {}, recentQuestionIds: [], feedback: [], history: [], lastStudyAt: null
+    conceptStats: {}, recentQuestionIds: [], feedback: [], history: [], lastStudyAt: null,
+    profile: null, people: []
   };
   let state = loadState();
   let route = 'home';
   let session = null;
   let selectedConceptCategory = 'stems';
   let detail = null;
+  let myView = 'summary';
+  let nobleView = 'map';
+  let selectedPersonId = null;
   const main = document.getElementById('main');
   const toast = document.getElementById('toast');
 
@@ -38,12 +42,54 @@
     const streakBonus = Math.min(10, (s.streak || 0) * 2);
     return Math.min(100, Math.round(rate * 85 * repetition + streakBonus));
   }
+  function calculateChart(profile) {
+    if (typeof Solar === 'undefined' || typeof Lunar === 'undefined') throw new Error('원국 계산 모듈을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.');
+    const [year,month,day]=profile.birthDate.split('-').map(Number);
+    const [hour,minute]=(profile.timeUnknown?'12:00':profile.birthTime).split(':').map(Number);
+    let solar;
+    if(profile.calendar==='solar') solar=Solar.fromYmdHms(year,month,day,hour,minute,0);
+    else solar=Lunar.fromYmdHms(year,profile.calendar==='lunarLeap'?-month:month,day,hour,minute,0).getSolar();
+    const eight=solar.getLunar().getEightChar();
+    return { year:eight.getYear(), month:eight.getMonth(), day:eight.getDay(), time:profile.timeUnknown?null:eight.getTime(), dayMaster:eight.getDayGan(), monthBranch:eight.getMonthZhi() };
+  }
+  function chartPillars(chart) {
+    return [['시주',chart.time||'—'],['일주',chart.day],['월주',chart.month],['년주',chart.year]];
+  }
+  function calendarLabel(value) { return value==='solar'?'양력':value==='lunarLeap'?'음력 윤달':'음력 평달'; }
+  function stemInfo(char) { return SAJU.stems.find(s=>s.char===char); }
+  function elementRelation(me,target) {
+    const flow={목:'화',화:'토',토:'금',금:'수',수:'목'};
+    const control={목:'토',화:'금',토:'수',금:'목',수:'화'};
+    if(me===target)return {tag:'공감',kind:'support',text:`두 사람의 일간이 모두 ${me} 기운이라 사고방식이나 속도에서 닮은 점을 찾기 쉽습니다.`};
+    if(flow[target]===me)return {tag:'보완',kind:'support',text:`상대의 ${target} 기운이 나의 ${me} 기운을 생하는 흐름이라 정보나 정서적 지원으로 연결될 수 있습니다.`};
+    if(flow[me]===target)return {tag:'활력',kind:'energy',text:`나의 ${me} 기운이 상대의 ${target} 기운을 생해 함께 움직일 때 표현과 활동이 활발해질 수 있습니다.`};
+    if(control[target]===me)return {tag:'긴장',kind:'tension',text:`상대의 ${target} 기운이 나의 ${me} 기운을 제어하는 관계라 기준이나 속도 차이가 자극으로 느껴질 수 있습니다.`};
+    return {tag:'조정',kind:'tension',text:`나의 ${me} 기운이 상대의 ${target} 기운을 제어하는 관계라 역할과 경계를 조율하는 과정이 중요합니다.`};
+  }
+  function branchRelations(aChart,bChart) {
+    const pairs={육합:['子丑','寅亥','卯戌','辰酉','巳申','午未'],충:['子午','丑未','寅申','卯酉','辰戌','巳亥'],파:['子酉','丑辰','寅亥','卯午','巳申','未戌'],해:['子未','丑午','寅巳','卯辰','申亥','酉戌']};
+    const a=[aChart.year,aChart.month,aChart.day,aChart.time].filter(Boolean).map(x=>x[1]);
+    const b=[bChart.year,bChart.month,bChart.day,bChart.time].filter(Boolean).map(x=>x[1]);
+    const found=[];
+    Object.entries(pairs).forEach(([name,list])=>a.forEach(x=>b.forEach(y=>{if(list.some(p=>p.includes(x)&&p.includes(y))&&!found.some(f=>f.name===name&&f.pair.includes(x)&&f.pair.includes(y)))found.push({name,pair:`${x}${y}`});})));
+    return found.slice(0,4);
+  }
+  function analyzePerson(person) {
+    if(!state.profile?.chart||!person.chart)return null;
+    const me=stemInfo(state.profile.chart.dayMaster), target=stemInfo(person.chart.dayMaster);
+    if(!me||!target)return null;
+    const base=elementRelation(me.element,target.element), relations=branchRelations(state.profile.chart,person.chart);
+    return {...base,me,target,relations};
+  }
   function showToast(message) {
     toast.textContent = message; toast.classList.add('show');
     clearTimeout(showToast.timer); showToast.timer = setTimeout(()=>toast.classList.remove('show'),1600);
   }
   function setRoute(next) {
-    route = next; detail = null; window.scrollTo(0,0); render();
+    route = next; detail = null;
+    if(next==='my')myView='summary';
+    if(next==='noble')nobleView='map';
+    window.scrollTo(0,0); render();
   }
   function navState() {
     document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.nav===route));
@@ -172,6 +218,28 @@
     main.innerHTML=`<button class="icon-btn" data-action="close-detail">←</button><div class="detail-hero"><span class="detail-char ${c.element?`element-${c.element}`:''}">${escapeHtml(c.char||c.name)}</span><h2>${escapeHtml(c.name)}</h2><p>${escapeHtml(c.polarity?`${c.polarity} · ${c.element}`:(c.group||c.relation||''))}</p></div>${body}<div class="detail-section"><h3>내 학습 기록</h3><p>시도 ${stat.attempts||0} · 정답 ${stat.correct||0} · 숙련도 ${mastery(stat)}%</p></div><button class="btn btn-primary" data-action="practice-concept" data-concept="${c.id}">관련 문제 풀기</button><div class="detail-nav"><button class="btn btn-secondary" data-action="prev-concept">이전</button><button class="btn btn-secondary" data-action="next-concept">다음</button></div>`;
   }
 
+  function renderNoble() {
+    if(nobleView==='person-form')return renderPersonForm();
+    if(nobleView==='detail')return renderPersonDetail();
+    if(!state.profile?.chart){
+      main.innerHTML=`<h1 class="page-title">귀인지도</h1><p class="page-desc">내 원국을 중심으로 주변 사람과의 관계를 읽어보세요.</p><section class="card"><div class="empty-illustration">命</div><div class="empty"><b>먼저 내 사주정보가 필요해요</b><p>마이에서 생년월일과 출생시간을 입력하면 귀인지도를 만들 수 있습니다.</p></div><button class="btn btn-primary" data-action="open-profile-form">내 사주정보 등록</button></section>`;
+      return;
+    }
+    const positions=[[29,25],[74,31],[78,67],[28,74],[19,47],[54,16],[52,84],[84,48]];
+    main.innerHTML=`<div class="section-head" style="margin-top:0"><div><h1 class="page-title">내 귀인지도</h1><p class="page-desc" style="margin-bottom:0">관계를 누르면 해석 근거를 볼 수 있어요.</p></div><button class="text-btn" data-action="add-person">+ 등록</button></div>
+      ${state.people.length?`<div class="map-wrap"><span class="map-axis map-axis-x"></span><span class="map-axis map-axis-y"></span><button class="person-node me"><b>나</b><small>${state.profile.chart.dayMaster}${stemInfo(state.profile.chart.dayMaster)?.element||''}</small></button>${state.people.slice(0,8).map((p,i)=>{const a=analyzePerson(p)||{tag:'확인',kind:'support'};const pos=positions[i];return `<button class="person-node ${a.kind}" style="left:${pos[0]}%;top:${pos[1]}%" data-person-id="${p.id}"><b>${escapeHtml(p.nickname)}</b><small>${a.tag}</small></button>`}).join('')}</div><div class="map-legend"><span><i class="legend-dot"></i>보완·공감</span><span><i class="legend-dot energy"></i>활력</span><span><i class="legend-dot tension"></i>긴장·조정</span></div>`:`<section class="card"><div class="empty-illustration">縁</div><div class="empty"><b>아직 등록된 사람이 없어요</b><p>가족, 친구, 연인, 동료를 직접 등록해 관계의 흐름을 살펴보세요.</p></div><button class="btn btn-primary" data-action="add-person">첫 사람 등록하기</button></section>`}
+      ${state.people.length?`<div class="section-head"><h2>등록한 사람</h2><span>${state.people.length}명</span></div><div class="person-list">${state.people.map(p=>{const a=analyzePerson(p)||{tag:'확인'};return `<div class="person-list-item"><button data-person-id="${p.id}"><b>${escapeHtml(p.nickname)} · ${escapeHtml(p.relationship)}</b><small>${p.chart.dayMaster}${stemInfo(p.chart.dayMaster)?.element||''} · ${a.tag}${p.timeUnknown?' · 출생시간 모름':''}</small></button><button class="delete-btn" data-delete-person="${p.id}" aria-label="${escapeHtml(p.nickname)} 삭제">×</button></div>`}).join('')}</div>`:''}`;
+  }
+  function renderPersonForm() {
+    main.innerHTML=`<button class="icon-btn" data-action="close-person-form">←</button><h1 class="page-title" style="margin-top:16px">주변 사람 등록</h1><p class="page-desc">상대방의 회원가입 없이 별명과 출생정보를 직접 입력합니다.</p>
+      <form class="form-stack" data-form="person"><label class="field-group">별명<input class="field-control" name="nickname" maxlength="12" required placeholder="예: 민아"></label><label class="field-group">관계<select class="field-control" name="relationship"><option>친구</option><option>가족</option><option>연인</option><option>직장동료</option><option>기타</option></select></label><div class="field-row"><label class="field-group">생년월일<input class="field-control" name="birthDate" type="date" required></label><label class="field-group">달력 기준<select class="field-control" name="calendar"><option value="solar">양력</option><option value="lunar">음력 평달</option><option value="lunarLeap">음력 윤달</option></select></label></div><label class="field-group">출생시간<input class="field-control" name="birthTime" type="time" value="12:00" required></label><label class="check-row"><input type="checkbox" name="timeUnknown"> 출생시간을 모릅니다</label><div class="form-note">출생시간을 모르면 시주를 제외하고 분석하며 결과에 정보 제한을 표시합니다. 실명 대신 별명 사용을 권장합니다.</div><button class="btn btn-primary" type="submit">등록하고 지도 보기</button></form>`;
+  }
+  function renderPersonDetail() {
+    const person=state.people.find(p=>p.id===selectedPersonId); if(!person){nobleView='map';return renderNoble();}
+    const a=analyzePerson(person); const relationText=a.relations.length?a.relations.map(r=>`${r.pair} ${r.name}`).join(', '):'두 원국 사이에서 기본 합·충·파·해가 두드러지지 않습니다.';
+    main.innerHTML=`<button class="icon-btn" data-action="back-to-map">←</button><div class="relation-hero" style="margin-top:14px"><strong>${person.chart.day}</strong><h2>${escapeHtml(person.nickname)} · ${escapeHtml(person.relationship)}</h2><p>나 ${state.profile.chart.dayMaster}${a.me.element} ↔ ${escapeHtml(person.nickname)} ${person.chart.dayMaster}${a.target.element}${person.timeUnknown?' · 출생시간 미입력':''}</p></div><section class="relation-section"><h3>${a.tag} 관계의 기본 흐름</h3><p>${a.text}</p></section><section class="relation-section"><h3>지지에서 찾은 관계</h3><p>${relationText}</p></section><section class="relation-section"><h3>해석할 때 주의</h3><p>한 가지 합이나 충만으로 좋은 인연 또는 나쁜 인연을 단정하지 않습니다. 두 원국 전체와 실제 관계 경험을 함께 살펴야 합니다.</p></section><div class="form-note" style="margin:14px 0">이 결과는 명리학 학습을 위한 관계 해석이며 상대의 성격이나 관계의 미래를 확정하지 않습니다.</div><button class="btn btn-secondary" data-action="back-to-map">지도로 돌아가기</button>`;
+  }
+
   function renderReport() {
     const groups=aggregateCategories(); const allCats=['음양오행','천간','지지','십성','합충형파해','원국 읽기','상담'];
     const weak=Object.entries(state.conceptStats).map(([id,s])=>({id,m:mastery(s),...s})).filter(x=>x.attempts>=2).sort((a,b)=>a.m-b.m).slice(0,4);
@@ -190,10 +258,17 @@
     return Object.entries(map).map(([pair,count])=>({pair,count})).sort((a,b)=>b.count-a.count).slice(0,5);
   }
   function renderMy() {
-    main.innerHTML=`<h1 class="page-title">마이</h1><p class="page-desc">학습 기록은 현재 이 기기에 안전하게 저장됩니다.</p>
+    if(myView==='profile-form')return renderProfileForm();
+    const profile=state.profile;
+    main.innerHTML=`<h1 class="page-title">마이</h1><p class="page-desc">내 사주정보와 학습 기록을 관리합니다.</p>
+      ${profile?.chart?`<section class="card profile-card"><div class="profile-head"><div><p class="eyebrow">내 사주정보</p><h2>${escapeHtml(profile.nickname)}</h2><p>${escapeHtml(profile.birthDate)} · ${calendarLabel(profile.calendar)}${profile.timeUnknown?' · 출생시간 모름':` · ${profile.birthTime}`}</p></div><button class="text-btn" data-action="open-profile-form">수정</button></div><div class="pillars">${chartPillars(profile.chart).map(x=>`<div class="pillar"><small>${x[0]}</small><b>${x[1]}</b></div>`).join('')}</div></section>`:`<section class="card profile-card"><p class="eyebrow">내 사주정보</p><h2 style="margin:0 0 7px;font-size:19px">귀인지도의 기준을 등록해요</h2><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.6">생년월일과 출생시간을 입력하면 내 원국을 계산하고 관계 지도에 활용합니다.</p><button class="btn btn-primary" style="margin-top:16px" data-action="open-profile-form">내 사주정보 등록</button></section>`}
       <section class="card"><p class="eyebrow">게스트 학습 중</p><h2 style="margin:0 0 7px;font-size:19px">로그인 없이 바로 배워요</h2><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.6">Google 로그인과 기기 간 동기화는 Firebase 연결 후 제공될 예정입니다.</p><button class="btn btn-secondary" style="margin-top:16px" data-action="login-info">Google로 계속하기</button></section>
       <div class="section-head"><h2>학습 정보</h2></div><div class="list-card"><div class="list-row"><div><b>누적 XP</b><small>정답 10 XP · 오답도 학습 2 XP</small></div><b>${state.xp}</b></div><div class="list-row"><div><b>최근 학습</b><small>${state.lastStudyAt?new Date(state.lastStudyAt).toLocaleDateString('ko-KR'):'아직 기록 없음'}</small></div></div><button class="list-row" data-action="admin"><div><b>관리자 피드백 보기</b><small>현재 기기에 누적된 해설 평가</small></div><span>›</span></button></div>
       <div class="section-head"><h2>데이터</h2></div><div class="list-card"><button class="list-row" data-action="reset"><div><b>학습 기록 초기화</b><small>이 기기의 모든 학습 기록 삭제</small></div><span>›</span></button></div><p style="text-align:center;color:var(--muted);font-size:10px;margin-top:18px">SajuStep v${APP_VERSION}</p>`;
+  }
+  function renderProfileForm() {
+    const p=state.profile||{nickname:'나',birthDate:'',calendar:'solar',birthTime:'12:00',timeUnknown:false,sex:'female'};
+    main.innerHTML=`<button class="icon-btn" data-action="close-profile-form">←</button><h1 class="page-title" style="margin-top:16px">내 사주정보</h1><p class="page-desc">입력한 정보로 원국을 자동 계산합니다.</p><form class="form-stack" data-form="profile"><label class="field-group">이름 또는 별명<input class="field-control" name="nickname" value="${escapeHtml(p.nickname)}" maxlength="12" required></label><div class="field-row"><label class="field-group">생년월일<input class="field-control" name="birthDate" type="date" value="${escapeHtml(p.birthDate)}" required></label><label class="field-group">달력 기준<select class="field-control" name="calendar"><option value="solar" ${p.calendar==='solar'?'selected':''}>양력</option><option value="lunar" ${p.calendar==='lunar'?'selected':''}>음력 평달</option><option value="lunarLeap" ${p.calendar==='lunarLeap'?'selected':''}>음력 윤달</option></select></label></div><label class="field-group">출생시간<input class="field-control" name="birthTime" type="time" value="${escapeHtml(p.birthTime||'12:00')}" ${p.timeUnknown?'disabled':''} required></label><label class="check-row"><input type="checkbox" name="timeUnknown" ${p.timeUnknown?'checked':''}> 출생시간을 모릅니다</label><label class="field-group">성별 · 대운 계산 기준<select class="field-control" name="sex"><option value="female" ${p.sex==='female'?'selected':''}>여성</option><option value="male" ${p.sex==='male'?'selected':''}>남성</option></select></label><div class="form-note">현재는 원국과 귀인지도 계산에 사용합니다. 명리학의 운 해석 방식은 관점 차이가 있어 추후 학습 과정에서 구분해 안내합니다.</div><button class="btn btn-primary" type="submit">저장하기</button></form>`;
   }
   function renderAdmin(filter='') {
     const feedback=state.feedback.filter(f=>!filter||`${f.questionId} ${f.question}`.toLowerCase().includes(filter.toLowerCase()));
@@ -201,7 +276,7 @@
   }
   function render() {
     document.getElementById('headerXp').textContent=`${state.xp} XP`; navState();
-    if(route==='home')renderHome(); else if(route==='study')renderStudy(); else if(route==='concepts')renderConcepts(); else if(route==='report')renderReport(); else if(route==='my')renderMy(); else if(route==='admin')renderAdmin();
+    if(route==='home')renderHome(); else if(route==='study')renderStudy(); else if(route==='concepts')renderConcepts(); else if(route==='noble')renderNoble(); else if(route==='report')renderReport(); else if(route==='my')renderMy(); else if(route==='admin')renderAdmin();
     navState(); main.focus({preventScroll:true});
   }
 
@@ -210,6 +285,8 @@
     const answer=e.target.closest('[data-answer]'); if(answer){answerQuestion(Number(answer.dataset.answer));return;}
     const cat=e.target.closest('[data-concept-category]'); if(cat){selectedConceptCategory=cat.dataset.conceptCategory;detail=null;render();return;}
     const concept=e.target.closest('[data-concept-index]'); if(concept){detail=Number(concept.dataset.conceptIndex);render();return;}
+    const person=e.target.closest('[data-person-id]'); if(person){selectedPersonId=person.dataset.personId;nobleView='detail';render();return;}
+    const deletePerson=e.target.closest('[data-delete-person]'); if(deletePerson){const target=state.people.find(p=>p.id===deletePerson.dataset.deletePerson);if(target&&confirm(`${target.nickname} 정보를 삭제할까요?`)){state.people=state.people.filter(p=>p.id!==target.id);saveState();render();}return;}
     const feedback=e.target.closest('[data-feedback]'); if(feedback){const q=session.questions[session.index];state.feedback.push({type:feedback.dataset.feedback,questionId:q.id,question:q.question,answer:q.options[q.answer].text,at:new Date().toISOString()});saveState();showToast('체크되었습니다');return;}
     const action=e.target.closest('[data-action]'); if(!action)return;
     switch(action.dataset.action){
@@ -224,8 +301,31 @@
       case 'practice-concept':{const pool=SAJU.questions.filter(q=>q.conceptIds.includes(action.dataset.concept));session={questions:(pool.length?pool:SAJU.questions).slice(0,10).map(shuffleQuestion),index:0,answered:false,selected:null,correct:0,earned:0};route='study';render();break;}
       case 'login-info':showToast('Firebase 설정 후 Google 로그인을 연결할 예정입니다');break;
       case 'admin':route='admin';render();break;
+      case 'open-profile-form':route='my';myView='profile-form';render();break;
+      case 'close-profile-form':myView='summary';render();break;
+      case 'add-person':nobleView='person-form';render();break;
+      case 'close-person-form':nobleView='map';render();break;
+      case 'back-to-map':nobleView='map';selectedPersonId=null;render();break;
       case 'reset':if(confirm('이 기기의 학습 기록을 모두 삭제할까요?')){state={...defaultState};saveState();setRoute('home');}break;
     }
+  });
+  document.addEventListener('change',e=>{
+    if(e.target.name==='timeUnknown'){
+      const form=e.target.closest('form'), time=form?.querySelector('[name="birthTime"]');
+      if(time)time.disabled=e.target.checked;
+    }
+  });
+  document.addEventListener('submit',e=>{
+    const form=e.target.closest('[data-form]'); if(!form)return; e.preventDefault();
+    const fd=new FormData(form), profile={nickname:String(fd.get('nickname')||'').trim(),birthDate:String(fd.get('birthDate')||''),calendar:String(fd.get('calendar')||'solar'),birthTime:String(fd.get('birthTime')||'12:00'),timeUnknown:fd.get('timeUnknown')==='on'};
+    try{
+      profile.chart=calculateChart(profile);
+      if(form.dataset.form==='profile'){
+        profile.sex=String(fd.get('sex')||'female'); state.profile=profile; myView='summary'; saveState(); showToast('내 사주정보를 저장했습니다'); render();
+      }else{
+        profile.relationship=String(fd.get('relationship')||'기타'); profile.id=`person-${Date.now()}-${Math.random().toString(36).slice(2,7)}`; state.people.push(profile); nobleView='map'; saveState(); showToast('귀인지도에 등록했습니다'); render();
+      }
+    }catch(error){showToast(error.message||'입력 정보를 확인해 주세요');}
   });
   document.addEventListener('input',e=>{if(e.target.id==='adminSearch')renderAdmin(e.target.value);});
   let touchX=0;
