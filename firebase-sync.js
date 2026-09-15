@@ -123,7 +123,7 @@ function authErrorMessage(err){
     'auth/popup-closed-by-user':'Google 로그인 창이 완료 전에 닫혔습니다.',
     'auth/cancelled-popup-request':'다른 로그인 요청이 진행 중입니다.'
   };
-  return `${messages[code]||err?.message||'Google 로그인에 실패했습니다.'}\n\n오류 코드: ${code}`;
+  return `${messages[code]||err?.message||'Google 로그인에 실패했습니다.'}\n\n오류 코드: ${code}\n접속 도메인: ${location.hostname}\nFirebase 프로젝트: ${config?.projectId||'설정 없음'}\n오류 내용: ${err?.message||'없음'}`;
 }
 function updateAccountCard(){
   const button=document.querySelector('[data-action="login-info"],[data-action="saju-logout"]');
