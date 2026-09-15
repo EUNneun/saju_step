@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const STORAGE_KEY = 'sajustep-state-v1';
-  const APP_VERSION = '1.2.4';
+  const APP_VERSION = '1.3.0';
   const defaultState = {
     version: APP_VERSION, xp: 0, attempts: 0, correct: 0, streak: 0,
     conceptStats: {}, recentQuestionIds: [], feedback: [], history: [], lastStudyAt: null,
@@ -80,11 +80,15 @@
   }
   function branchRelations(aChart,bChart) {
     const pairs={육합:['子丑','寅亥','卯戌','辰酉','巳申','午未'],충:['子午','丑未','寅申','卯酉','辰戌','巳亥'],파:['子酉','丑辰','寅亥','卯午','巳申','未戌'],해:['子未','丑午','寅巳','卯辰','申亥','酉戌']};
-    const a=[aChart.year,aChart.month,aChart.day,aChart.time].filter(Boolean).map(x=>x[1]);
-    const b=[bChart.year,bChart.month,bChart.day,bChart.time].filter(Boolean).map(x=>x[1]);
+    const pillars=[['day','일지'],['month','월지'],['year','연지'],['time','시지']];
+    const left=pillars.filter(([key])=>aChart[key]).map(([key,label])=>({char:aChart[key][1],label,key}));
+    const right=pillars.filter(([key])=>bChart[key]).map(([key,label])=>({char:bChart[key][1],label,key}));
     const found=[];
-    Object.entries(pairs).forEach(([name,list])=>a.forEach(x=>b.forEach(y=>{if(list.some(p=>p.includes(x)&&p.includes(y))&&!found.some(f=>f.name===name&&f.pair.includes(x)&&f.pair.includes(y)))found.push({name,pair:`${x}${y}`});})));
-    return found.slice(0,4);
+    for(const [name,list] of Object.entries(pairs))for(const a of left)for(const b of right){
+      if(a.char===b.char || !list.some(pair=>pair===a.char+b.char || pair===b.char+a.char))continue;
+      found.push({name,pair:a.char+b.char,aPillar:a.label,bPillar:b.label,priority:(a.key==='day'?4:a.key==='month'?2:0)+(b.key==='day'?4:b.key==='month'?2:0)});
+    }
+    return found.sort((x,y)=>y.priority-x.priority).slice(0,8);
   }
   function analyzePerson(person) {
     if(!state.profile?.chart||!person.chart)return null;
@@ -92,6 +96,17 @@
     if(!me||!target)return null;
     const base=elementRelation(me.element,target.element), relations=branchRelations(state.profile.chart,person.chart);
     return {...base,me,target,relations};
+  }
+  const relationGuide={
+    육합:{meaning:'두 지지가 서로 맞물리는 짝으로 읽습니다. 협력의 접점을 찾는 단서이지만, 이것만으로 친밀함을 확정할 수는 없습니다.',question:'무엇을 함께할 때 서로의 장점이 살아나는지 살펴보세요.'},
+    충:{meaning:'두 지지가 마주 보는 짝입니다. 속도나 선택의 방향이 달라 자극이 될 수 있지만, 변화와 조정의 계기로도 읽습니다.',question:'의견이 부딪힐 때 어떤 기준이 다른지 먼저 확인해 보세요.'},
+    파:{meaning:'이어가던 흐름에 틈이 생기는 관계로 읽습니다. 사소한 일정이나 기대의 차이를 점검하는 단서로 활용할 수 있습니다.',question:'서로 당연하게 여기는 약속이 같은지 확인해 보세요.'},
+    해:{meaning:'겉으로 드러나지 않은 엇갈림을 살피는 관계로 읽습니다. 상대의 의도를 단정하기보다 오해가 쌓이는 장면을 돌아보세요.',question:'말한 의도와 실제로 받아들인 의미가 달랐는지 물어보세요.'}
+  };
+  function practicalRelationTip(kind) {
+    if(kind==='support')return '서로 편안한 지점이 무엇인지 말로 확인하고, 익숙함 때문에 필요한 부탁을 생략하지 않는 것이 좋습니다.';
+    if(kind==='energy')return '함께 시작할 일과 각자의 휴식 시간을 나눠 두면 활발한 흐름을 무리 없이 이어갈 수 있습니다.';
+    return '의견 차이를 성격 탓으로 돌리기보다, 일의 순서와 서로 기대하는 역할을 구체적으로 맞춰 보세요.';
   }
   function showToast(message) {
     toast.textContent = message; toast.classList.add('show');
@@ -257,18 +272,32 @@
     const positions=[[29,25],[74,31],[78,67],[28,74],[19,47],[54,16],[52,84],[84,48]];
     main.innerHTML=`<div class="section-head" style="margin-top:0"><div><h1 class="page-title">내 관계지도</h1><p class="page-desc" style="margin-bottom:0">관계를 누르면 해석 근거를 볼 수 있어요.</p></div><button class="text-btn" data-action="add-person">+ 등록</button></div>
       ${state.people.length?`<div class="map-wrap"><span class="map-axis map-axis-x"></span><span class="map-axis map-axis-y"></span><button class="person-node me"><b>나</b><small>${state.profile.chart.dayMaster} · ${stemInfo(state.profile.chart.dayMaster)?.name||''}</small></button>${state.people.slice(0,8).map((p,i)=>{const a=analyzePerson(p)||{tag:'확인',kind:'support'};const pos=positions[i];return `<button class="person-node ${a.kind}" style="left:${pos[0]}%;top:${pos[1]}%" data-person-id="${p.id}"><b>${escapeHtml(p.nickname)}</b><small>${a.tag}</small></button>`}).join('')}</div><div class="map-legend"><span><i class="legend-dot"></i>보완·공감</span><span><i class="legend-dot energy"></i>활력</span><span><i class="legend-dot tension"></i>긴장·조정</span></div>`:`<section class="card"><div class="empty-illustration">縁</div><div class="empty"><b>아직 등록된 사람이 없어요</b><p>가족, 친구, 연인, 동료를 직접 등록해 관계의 흐름을 살펴보세요.</p></div><button class="btn btn-primary" data-action="add-person">첫 사람 등록하기</button></section>`}
-      ${state.people.length?`<div class="section-head"><h2>등록한 사람</h2><span>${state.people.length}명</span></div><div class="person-list">${state.people.map(p=>{const a=analyzePerson(p)||{tag:'확인'};return `<div class="person-list-item"><button data-person-id="${p.id}"><b>${escapeHtml(p.nickname)} · ${escapeHtml(p.relationship)}</b><small>${p.chart.dayMaster} ${stemInfo(p.chart.dayMaster)?.name||''} · ${a.tag}${p.timeUnknown?' · 출생시간 모름':''}</small></button><button class="delete-btn" data-delete-person="${p.id}" aria-label="${escapeHtml(p.nickname)} 삭제">×</button></div>`}).join('')}</div>`:''}`;
+      ${state.people.length?`<div class="section-head"><h2>등록한 사람</h2><span>${state.people.length}명</span></div><div class="person-list">${state.people.map(p=>{const a=analyzePerson(p)||{tag:'확인'};return `<div class="person-list-item"><button data-person-id="${p.id}"><b>${escapeHtml(p.nickname)} · ${escapeHtml(p.relationship)}</b><small>${p.chart.dayMaster} ${stemInfo(p.chart.dayMaster)?.name||''} · ${a.tag}${p.timeUnknown?' · 출생시간 모름':''}</small></button><button class="edit-btn" data-edit-person="${p.id}" aria-label="${escapeHtml(p.nickname)} 수정">수정</button><button class="delete-btn" data-delete-person="${p.id}" aria-label="${escapeHtml(p.nickname)} 삭제">×</button></div>`}).join('')}</div>`:''}`;
   }
   function renderPersonForm() {
-    main.innerHTML=`<button class="icon-btn" data-action="close-person-form">←</button><h1 class="page-title" style="margin-top:16px">주변 사람 등록</h1><p class="page-desc">상대방의 회원가입 없이 별명과 출생정보를 직접 입력합니다.</p>
-      <form class="form-stack" data-form="person"><label class="field-group">별명<input class="field-control" name="nickname" maxlength="12" required placeholder="예: 민아"></label><label class="field-group">관계<select class="field-control" name="relationship"><option>친구</option><option>가족</option><option>연인</option><option>직장동료</option><option>기타</option></select></label><div class="field-row"><label class="field-group">생년월일<input class="field-control" name="birthDate" type="date" required></label><label class="field-group">달력 기준<select class="field-control" name="calendar"><option value="solar">양력</option><option value="lunar">음력 평달</option><option value="lunarLeap">음력 윤달</option></select></label></div><label class="field-group">출생시간<input class="field-control" name="birthTime" type="time" value="12:00" required></label><label class="check-row"><input type="checkbox" name="timeUnknown"> 출생시간을 모릅니다</label><div class="form-note">출생시간을 모르면 시주를 제외하고 분석하며 결과에 정보 제한을 표시합니다. 실명 대신 별명 사용을 권장합니다.</div><button class="btn btn-primary" type="submit">등록하고 지도 보기</button></form>`;
+    const editing=selectedPersonId?state.people.find(x=>x.id===selectedPersonId):null;
+    const p=editing||{nickname:'',relationship:'친구',birthDate:'',calendar:'solar',birthTime:'12:00',timeUnknown:false};
+    const options=['친구','가족','연인','직장동료','기타'];
+    main.innerHTML=`<button class="icon-btn" data-action="close-person-form">←</button><h1 class="page-title" style="margin-top:16px">${editing?'사주정보 수정':'주변 사람 등록'}</h1><p class="page-desc">${editing?'출생정보를 변경하면 원국과 관계 풀이를 다시 계산합니다.':'상대방의 회원가입 없이 별명과 출생정보를 직접 입력합니다.'}</p>
+      <form class="form-stack" data-form="person" data-edit-person-id="${editing?escapeHtml(editing.id):''}"><label class="field-group">별명<input class="field-control" name="nickname" value="${escapeHtml(p.nickname)}" maxlength="12" required placeholder="예: 민아"></label><label class="field-group">관계<select class="field-control" name="relationship">${options.map(x=>`<option value="${x}" ${p.relationship===x?'selected':''}>${x}</option>`).join('')}</select></label><div class="field-row"><label class="field-group">생년월일<input class="field-control" name="birthDate" type="date" value="${escapeHtml(p.birthDate)}" required></label><label class="field-group">달력 기준<select class="field-control" name="calendar"><option value="solar" ${p.calendar==='solar'?'selected':''}>양력</option><option value="lunar" ${p.calendar==='lunar'?'selected':''}>음력 평달</option><option value="lunarLeap" ${p.calendar==='lunarLeap'?'selected':''}>음력 윤달</option></select></label></div><label class="field-group">출생시간<input class="field-control" name="birthTime" type="time" value="${escapeHtml(p.birthTime||'12:00')}" ${p.timeUnknown?'disabled':''} required></label><label class="check-row"><input type="checkbox" name="timeUnknown" ${p.timeUnknown?'checked':''}> 출생시간을 모릅니다</label><div class="form-note">출생시간을 모르면 시주를 제외하고 분석합니다. 실명 대신 별명 사용을 권장합니다.</div><button class="btn btn-primary" type="submit">${editing?'수정 내용 저장':'등록하고 지도 보기'}</button></form>`;
   }
   function renderPersonDetail() {
     const person=state.people.find(p=>p.id===selectedPersonId); if(!person){nobleView='map';return renderNoble();}
-    const a=analyzePerson(person); const relationText=a.relations.length?a.relations.map(r=>`${r.pair} ${r.name}`).join(', '):'두 원국 사이에서 기본 합·충·파·해가 두드러지지 않습니다.';
-    main.innerHTML=`<button class="icon-btn" data-action="back-to-map">←</button><div class="relation-hero" style="margin-top:14px"><strong>${person.chart.day}</strong><span class="ganji-reading">${ganjiKorean(person.chart.day)}</span><h2>${escapeHtml(person.nickname)} · ${escapeHtml(person.relationship)}</h2><p>나 ${state.profile.chart.dayMaster} ${a.me.name} ↔ ${escapeHtml(person.nickname)} ${person.chart.dayMaster} ${a.target.name}${person.timeUnknown?' · 출생시간 미입력':''}</p></div><section class="relation-section"><h3>${a.tag} 관계의 기본 흐름</h3><p>${a.text}</p></section><section class="relation-section"><h3>지지에서 찾은 관계</h3><p>${relationText}</p></section><section class="relation-section"><h3>해석할 때 주의</h3><p>한 가지 합이나 충만으로 좋은 인연 또는 나쁜 인연을 단정하지 않습니다. 두 원국 전체와 실제 관계 경험을 함께 살펴야 합니다.</p></section><div class="form-note" style="margin:14px 0">이 결과는 명리학 학습을 위한 관계 해석이며 상대의 성격이나 관계의 미래를 확정하지 않습니다.</div><button class="btn btn-secondary" data-action="back-to-map">지도로 돌아가기</button>`;
+    const a=analyzePerson(person); if(!a){nobleView='map';return renderNoble();}
+    const myChart=state.profile.chart, theirChart=person.chart;
+    const chartRow=(label,chart)=>`<div class="relation-chart"><b>${escapeHtml(label)}</b><div class="relation-pillars">${chartPillars(chart).map(([title,value])=>`<div><small>${title}</small><strong>${value}</strong><em>${ganjiKorean(value)}</em></div>`).join('')}</div></div>`;
+    const relationRows=a.relations.map(r=>{const guide=relationGuide[r.name];return `<article class="relation-found"><div class="relation-found-title"><b>${r.name} · ${r.pair} <small>${ganjiKorean(r.pair)}</small></b><span>나의 ${r.aPillar} ↔ 상대의 ${r.bPillar}</span></div><p>${guide.meaning}</p><p class="relation-question">${guide.question}</p></article>`;}).join('');
+    const sameElement=a.me.element===a.target.element;
+    const polarityNote=sameElement?`같은 ${a.me.element} 기운이지만 ${a.me.polarity===a.target.polarity?'음양도 같아 기본 반응이 닮아 보일 수 있습니다.':'음양이 달라 표현 방식에는 차이가 있을 수 있습니다.'}`:`서로 다른 ${a.me.element}·${a.target.element} 기운의 흐름을 비교한 결과입니다.`;
+    const timeNote=state.profile.timeUnknown||person.timeUnknown?'출생시간을 모르는 사람이 있어 시주는 비교하지 않았습니다. 입력을 수정하면 해당 비교가 추가됩니다.':'두 사람의 시주도 비교에 포함했습니다.';
+    main.innerHTML=`<div class="relation-top"><button class="icon-btn" data-action="back-to-map" aria-label="지도로 돌아가기">←</button><button class="edit-btn" data-action="edit-person">사주정보 수정</button></div>
+      <div class="relation-hero"><strong>${theirChart.day}</strong><span class="ganji-reading">${ganjiKorean(theirChart.day)}</span><h2>${escapeHtml(person.nickname)} · ${escapeHtml(person.relationship)}</h2><p>${escapeHtml(person.birthDate)} · ${calendarLabel(person.calendar)}${person.timeUnknown?' · 출생시간 모름':` · ${escapeHtml(person.birthTime)}`}</p></div>
+      <section class="relation-section"><h3>두 사람의 원국</h3><div class="relation-charts">${chartRow('나',myChart)}${chartRow(person.nickname,theirChart)}</div><p class="relation-note">${timeNote}</p></section>
+      <section class="relation-section"><h3>일간에서 시작하는 풀이</h3><div class="relation-stems"><div><b>나 · ${myChart.dayMaster} ${a.me.name}</b><p>${a.me.nature} · ${a.me.keywords.join(' · ')}</p></div><div><b>${escapeHtml(person.nickname)} · ${theirChart.dayMaster} ${a.target.name}</b><p>${a.target.nature} · ${a.target.keywords.join(' · ')}</p></div></div><p><b class="relation-tag">${a.tag}</b> ${a.text}</p><p class="relation-note">${polarityNote} 일간은 관계를 읽기 위한 첫 단서이며, 개인의 성격 전체를 뜻하지는 않습니다.</p></section>
+      <section class="relation-section"><h3>지지에서 찾은 연결</h3><p class="relation-note">연지·월지·일지·시지의 글자를 서로 비교하고, 일지가 포함된 짝을 먼저 보여줍니다.</p>${relationRows||'<p>현재 입력된 원국에서 표시할 육합·충·파·해 짝을 찾지 못했습니다. 같은 지지나 다른 조합도 관계에 영향을 줄 수 있으므로 이것만으로 관계가 없다고 해석하지 않습니다.</p>'}</section>
+      <section class="relation-section"><h3>실제 관계에서 적용하기</h3><p>${practicalRelationTip(a.kind)}</p><p class="relation-note">${a.relations.length?'위에 표시된 짝은 해석의 단서입니다.':'지지 짝이 표시되지 않아도 일상에서 맞는 점과 어긋나는 점을 직접 확인할 수 있습니다.'} 평소 대화, 갈등이 생긴 장면, 함께 일할 때의 리듬을 같이 살펴보세요.</p></section>
+      <div class="form-note" style="margin:14px 0">명리학 학습용 해석입니다. 한 가지 합·충으로 좋은 인연이나 관계의 미래를 확정하지 않으며, 입력 정보와 실제 경험을 함께 확인해야 합니다.</div><button class="btn btn-secondary" data-action="back-to-map">지도로 돌아가기</button>`;
   }
-
   function renderReport() {
     const groups=aggregateCategories(); const allCats=['음양오행','천간','지지','십성','합충형파해','원국 읽기','상담'];
     const weak=Object.entries(state.conceptStats).map(([id,s])=>({id,m:mastery(s),...s})).filter(x=>x.attempts>=2).sort((a,b)=>a.m-b.m).slice(0,4);
@@ -316,6 +345,7 @@
     const relationMode=e.target.closest('[data-relation-mode]'); if(relationMode){conceptRelationMode[selectedConceptCategory]=relationMode.dataset.relationMode;render();return;}
     const concept=e.target.closest('[data-concept-index]'); if(concept){detail=Number(concept.dataset.conceptIndex);render();return;}
     const person=e.target.closest('[data-person-id]'); if(person){selectedPersonId=person.dataset.personId;nobleView='detail';render();return;}
+    const editPerson=e.target.closest('[data-edit-person]'); if(editPerson){selectedPersonId=editPerson.dataset.editPerson;nobleView='person-form';render();return;}
     const deletePerson=e.target.closest('[data-delete-person]'); if(deletePerson){const target=state.people.find(p=>p.id===deletePerson.dataset.deletePerson);if(target&&confirm(`${target.nickname} 정보를 삭제할까요?`)){state.people=state.people.filter(p=>p.id!==target.id);saveState();render();}return;}
     const feedback=e.target.closest('[data-feedback]'); if(feedback){const q=session.questions[session.index];state.feedback.push({type:feedback.dataset.feedback,questionId:q.id,question:q.question,answer:q.options[q.answer].text,at:new Date().toISOString()});saveState();showToast('체크되었습니다');return;}
     const action=e.target.closest('[data-action]'); if(!action)return;
@@ -334,8 +364,9 @@
       case 'admin':route='admin';render();break;
       case 'open-profile-form':route='my';myView='profile-form';render();break;
       case 'close-profile-form':myView='summary';render();break;
-      case 'add-person':nobleView='person-form';render();break;
-      case 'close-person-form':nobleView='map';render();break;
+      case 'add-person':selectedPersonId=null;nobleView='person-form';render();break;
+      case 'edit-person':nobleView='person-form';render();break;
+      case 'close-person-form':nobleView=selectedPersonId?'detail':'map';render();break;
       case 'back-to-map':nobleView='map';selectedPersonId=null;render();break;
       case 'reset':if(confirm('이 기기의 학습 기록을 모두 삭제할까요?')){state={...defaultState};saveState();setRoute('home');}break;
     }
@@ -354,7 +385,17 @@
       if(form.dataset.form==='profile'){
         profile.sex=String(fd.get('sex')||'female'); state.profile=profile; myView='summary'; saveState(); showToast('내 사주정보를 저장했습니다'); render();
       }else{
-        profile.relationship=String(fd.get('relationship')||'기타'); profile.id=`person-${Date.now()}-${Math.random().toString(36).slice(2,7)}`; state.people.push(profile); nobleView='map'; saveState(); showToast('관계지도에 등록했습니다'); render();
+        profile.relationship=String(fd.get('relationship')||'기타');
+        const editId=form.dataset.editPersonId;
+        if(editId){
+          const index=state.people.findIndex(person=>person.id===editId);
+          if(index<0)throw new Error('수정할 사람을 찾지 못했습니다. 관계지도를 다시 확인해 주세요.');
+          state.people[index]={...state.people[index],...profile,id:editId,updatedAt:new Date().toISOString()};
+          selectedPersonId=editId; nobleView='detail'; saveState(); showToast('사주정보와 관계 풀이를 수정했습니다'); render();
+        }else{
+          profile.id=`person-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+          profile.updatedAt=new Date().toISOString(); state.people.push(profile); selectedPersonId=null; nobleView='map'; saveState(); showToast('관계지도에 등록했습니다'); render();
+        }
       }
     }catch(error){showToast(error.message||'입력 정보를 확인해 주세요');}
   });
