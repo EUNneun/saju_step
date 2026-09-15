@@ -5,12 +5,12 @@ import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.
 const STORAGE_KEY='sajustep-state-v1';
 const OWNER_KEY='sajustep-state-owner-v1';
 const GUEST_OWNER='guest';
-const SYNC_SESSION_KEY='sajustep-auth-synced-uid';
 const config=window.SAJU_FIREBASE_CONFIG;
 
 let activeUser=null;
 let lastLocalSnapshot=localStorage.getItem(STORAGE_KEY)||'';
 let saveTimer=null;
+let syncInProgress=false;
 
 function readLocal(){
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}') || {}; }
@@ -45,6 +45,11 @@ function mergeFeedback(a=[],b=[]){
     seen.add(key);
     return true;
   }).slice(-500);
+}
+function mergeProfile(local,remote){
+  if(!local)return remote||null;
+  if(!remote)return local;
+  return (Date.parse(remote.updatedAt||'')||0)>(Date.parse(local.updatedAt||'')||0)?remote:local;
 }
 function mergePeople(a=[],b=[]){
   const out=[];
@@ -95,7 +100,7 @@ function mergeSafe(local={},remote={}){
     feedback:mergeFeedback(remote.feedback,local.feedback),
     history:mergeHistory(remote.history,local.history),
     lastStudyAt:later(local.lastStudyAt,remote.lastStudyAt),
-    profile:local.profile||remote.profile||null,
+    profile:mergeProfile(local.profile,remote.profile),
     people:mergePeople(local.people,remote.people)
   };
 }
@@ -113,7 +118,7 @@ function mergeGuest(guest={},remote={}){
     feedback:mergeFeedback(remote.feedback,guest.feedback),
     history:mergeHistory(remote.history,guest.history),
     lastStudyAt:later(guest.lastStudyAt,remote.lastStudyAt),
-    profile:guest.profile||remote.profile||null,
+    profile:mergeProfile(guest.profile,remote.profile),
     people:mergePeople(guest.people,remote.people)
   };
 }
@@ -191,7 +196,6 @@ if(!config){
     try { if(activeUser) await pushState(activeUser); } catch(err){ console.error('[SajuStep] final cloud save failed',err); }
     localStorage.removeItem(STORAGE_KEY);
     localStorage.setItem(OWNER_KEY,GUEST_OWNER);
-    sessionStorage.removeItem(SYNC_SESSION_KEY);
     await signOut(auth);
     location.reload();
   }
@@ -209,12 +213,18 @@ if(!config){
   observer.observe(document.getElementById('main'),{childList:true});
 
   onAuthStateChanged(auth,async user=>{
+    syncInProgress=true;
+    clearTimeout(saveTimer);
+    window.dispatchEvent(new Event('sajustep-sync-start'));
     activeUser=user;
     window.SAJU_AUTH_USER=user?{uid:user.uid,displayName:user.displayName||'',email:user.email||'',photoURL:user.photoURL||''}:null;
     if(!user){
       const owner=localStorage.getItem(OWNER_KEY);
       if(owner&&owner!==GUEST_OWNER) localStorage.removeItem(STORAGE_KEY);
       localStorage.setItem(OWNER_KEY,GUEST_OWNER);
+      syncInProgress=false;
+      lastLocalSnapshot=localStorage.getItem(STORAGE_KEY)||'';
+      window.dispatchEvent(new Event('sajustep-sync-complete'));
       updateAccountCard();
       return;
     }
@@ -224,20 +234,18 @@ if(!config){
     try{
       await loadOrMerge(user,mode);
       localStorage.setItem(OWNER_KEY,user.uid);
-      if(sessionStorage.getItem(SYNC_SESSION_KEY)!==user.uid){
-        sessionStorage.setItem(SYNC_SESSION_KEY,user.uid);
-        location.reload();
-        return;
-      }
     }catch(err){
       console.error('[SajuStep] cloud sync failed',err);
       localStorage.setItem(OWNER_KEY,user.uid);
     }
+    syncInProgress=false;
+    lastLocalSnapshot=localStorage.getItem(STORAGE_KEY)||'';
+    window.dispatchEvent(new Event('sajustep-sync-complete'));
     updateAccountCard();
   });
 
   setInterval(()=>{
-    if(!activeUser) return;
+    if(!activeUser||syncInProgress) return;
     const current=localStorage.getItem(STORAGE_KEY)||'';
     if(current===lastLocalSnapshot) return;
     lastLocalSnapshot=current;
