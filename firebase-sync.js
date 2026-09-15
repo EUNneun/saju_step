@@ -203,7 +203,7 @@ if(!config){
   },true);
 
   const observer=new MutationObserver(()=>updateAccountCard());
-  observer.observe(document.getElementById('main'),{childList:true,subtree:true});
+  observer.observe(document.getElementById('main'),{childList:true});
 
   onAuthStateChanged(auth,async user=>{
     activeUser=user;
