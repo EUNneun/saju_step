@@ -48,12 +48,15 @@ function mergeFeedback(a=[],b=[]){
 }
 function mergePeople(a=[],b=[]){
   const out=[];
-  const seen=new Set();
+  const positions=new Map();
   for(const person of [...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])]){
-    const key=person?.id || `${person?.nickname||''}|${person?.birthDate||''}|${person?.birthTime||''}|${person?.relationship||''}`;
-    if(seen.has(key)) continue;
-    seen.add(key);
-    out.push(person);
+    if(!person)continue;
+    const key=person.id || `${person.nickname||''}|${person.birthDate||''}|${person.birthTime||''}|${person.relationship||''}`;
+    const index=positions.get(key);
+    if(index===undefined){positions.set(key,out.length);out.push(person);continue;}
+    const currentTime=Date.parse(out[index]?.updatedAt||'')||0;
+    const nextTime=Date.parse(person.updatedAt||'')||0;
+    if(nextTime>currentTime)out[index]=person;
   }
   return out;
 }
@@ -93,7 +96,7 @@ function mergeSafe(local={},remote={}){
     history:mergeHistory(remote.history,local.history),
     lastStudyAt:later(local.lastStudyAt,remote.lastStudyAt),
     profile:local.profile||remote.profile||null,
-    people:mergePeople(remote.people,local.people)
+    people:mergePeople(local.people,remote.people)
   };
 }
 function mergeGuest(guest={},remote={}){
@@ -111,7 +114,7 @@ function mergeGuest(guest={},remote={}){
     history:mergeHistory(remote.history,guest.history),
     lastStudyAt:later(guest.lastStudyAt,remote.lastStudyAt),
     profile:guest.profile||remote.profile||null,
-    people:mergePeople(remote.people,guest.people)
+    people:mergePeople(guest.people,remote.people)
   };
 }
 function authErrorMessage(err){
