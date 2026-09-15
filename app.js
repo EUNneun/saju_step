@@ -1,13 +1,14 @@
 (() => {
   'use strict';
   const STORAGE_KEY = 'sajustep-state-v1';
-  const APP_VERSION = '1.3.0';
+  const APP_VERSION = '1.3.1';
   const defaultState = {
     version: APP_VERSION, xp: 0, attempts: 0, correct: 0, streak: 0,
     conceptStats: {}, recentQuestionIds: [], feedback: [], history: [], lastStudyAt: null,
     profile: null, people: []
   };
   let state = loadState();
+  let syncPending = false;
   let route = 'home';
   let session = null;
   let selectedConceptCategory = 'stems';
@@ -24,6 +25,7 @@
     catch { return {...defaultState}; }
   }
   function saveState() {
+    if (syncPending) throw new Error('계정 데이터를 불러오는 중입니다. 잠시 후 다시 저장해 주세요.');
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     document.getElementById('headerXp').textContent = `${state.xp} XP`;
   }
@@ -338,7 +340,18 @@
     navState(); main.focus({preventScroll:true});
   }
 
+  window.addEventListener('sajustep-sync-start',()=>{ syncPending=true; });
+  window.addEventListener('sajustep-sync-complete',()=>{
+    syncPending=false;
+    state=loadState();
+    // 작성 중인 입력값은 유지하고, 다음 저장부터 병합된 최신 상태를 사용합니다.
+    if(!main.querySelector('form[data-form]')) render();
+    else document.getElementById('headerXp').textContent=`${state.xp} XP`;
+  });
   document.addEventListener('click', e=>{
+    if(syncPending && e.target.closest('[data-action],[data-answer],[data-edit-person],[data-delete-person]')){
+      e.preventDefault(); showToast('계정 데이터를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.'); return;
+    }
     const nav=e.target.closest('[data-nav]'); if(nav){setRoute(nav.dataset.nav);return;}
     const answer=e.target.closest('[data-answer]'); if(answer){answerQuestion(Number(answer.dataset.answer));return;}
     const cat=e.target.closest('[data-concept-category]'); if(cat){selectedConceptCategory=cat.dataset.conceptCategory;detail=null;render();return;}
@@ -379,11 +392,12 @@
   });
   document.addEventListener('submit',e=>{
     const form=e.target.closest('[data-form]'); if(!form)return; e.preventDefault();
+    if(syncPending){showToast('계정 데이터를 불러오는 중입니다. 잠시 후 다시 저장해 주세요.');return;}
     const fd=new FormData(form), profile={nickname:String(fd.get('nickname')||'').trim(),birthDate:String(fd.get('birthDate')||''),calendar:String(fd.get('calendar')||'solar'),birthTime:String(fd.get('birthTime')||'12:00'),timeUnknown:fd.get('timeUnknown')==='on'};
     try{
       profile.chart=calculateChart(profile);
       if(form.dataset.form==='profile'){
-        profile.sex=String(fd.get('sex')||'female'); state.profile=profile; myView='summary'; saveState(); showToast('내 사주정보를 저장했습니다'); render();
+        profile.sex=String(fd.get('sex')||'female'); profile.updatedAt=new Date().toISOString(); state.profile=profile; myView='summary'; saveState(); showToast('내 사주정보를 저장했습니다'); render();
       }else{
         profile.relationship=String(fd.get('relationship')||'기타');
         const editId=form.dataset.editPersonId;
