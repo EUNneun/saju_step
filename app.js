@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const STORAGE_KEY = 'sajustep-state-v1';
-  const APP_VERSION = '1.2.1';
+  const APP_VERSION = '1.2.2';
   const defaultState = {
     version: APP_VERSION, xp: 0, attempts: 0, correct: 0, streak: 0,
     conceptStats: {}, recentQuestionIds: [], feedback: [], history: [], lastStudyAt: null,
@@ -291,7 +291,7 @@
     const profile=state.profile;
     main.innerHTML=`<h1 class="page-title">마이</h1><p class="page-desc">내 사주정보와 학습 기록을 관리합니다.</p>
       ${profile?.chart?`<section class="card profile-card"><div class="profile-head"><div><p class="eyebrow">내 사주정보</p><h2>${escapeHtml(profile.nickname)}</h2><p>${escapeHtml(profile.birthDate)} · ${calendarLabel(profile.calendar)}${profile.timeUnknown?' · 출생시간 모름':` · ${profile.birthTime}`}</p></div><button class="text-btn" data-action="open-profile-form">수정</button></div><div class="pillars">${chartPillars(profile.chart).map(x=>`<div class="pillar"><small>${x[0]}</small><b>${x[1]}</b><em>${ganjiKorean(x[1])}</em></div>`).join('')}</div></section>`:`<section class="card profile-card"><p class="eyebrow">내 사주정보</p><h2 style="margin:0 0 7px;font-size:19px">관계 분석의 기준을 등록해요</h2><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.6">생년월일과 출생시간을 입력하면 내 원국을 계산하고 관계지도에 활용합니다.</p><button class="btn btn-primary" style="margin-top:16px" data-action="open-profile-form">내 사주정보 등록</button></section>`}
-      <section class="card"><p class="eyebrow">게스트 학습 중</p><h2 style="margin:0 0 7px;font-size:19px">로그인 없이 바로 배워요</h2><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.6">Google 로그인과 기기 간 동기화는 Firebase 연결 후 제공될 예정입니다.</p><button class="btn btn-secondary" style="margin-top:16px" data-action="login-info">Google로 계속하기</button></section>
+      <section class="card"><p class="eyebrow">게스트 학습 중</p><h2 style="margin:0 0 7px;font-size:19px">로그인 없이 바로 배워요</h2><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.6">Google로 로그인하면 학습 기록과 사주정보를 다른 기기에서도 이어볼 수 있습니다.</p><button class="btn btn-secondary" style="margin-top:16px" data-action="login-info">Google로 계속하기</button></section>
       <div class="section-head"><h2>학습 정보</h2></div><div class="list-card"><div class="list-row"><div><b>누적 XP</b><small>정답 10 XP · 오답도 학습 2 XP</small></div><b>${state.xp}</b></div><div class="list-row"><div><b>최근 학습</b><small>${state.lastStudyAt?new Date(state.lastStudyAt).toLocaleDateString('ko-KR'):'아직 기록 없음'}</small></div></div><button class="list-row" data-action="admin"><div><b>관리자 피드백 보기</b><small>현재 기기에 누적된 해설 평가</small></div><span>›</span></button></div>
       <div class="section-head"><h2>데이터</h2></div><div class="list-card"><button class="list-row" data-action="reset"><div><b>학습 기록 초기화</b><small>이 기기의 모든 학습 기록 삭제</small></div><span>›</span></button></div><p style="text-align:center;color:var(--muted);font-size:10px;margin-top:18px">SajuStep v${APP_VERSION}</p>`;
   }
@@ -330,7 +330,7 @@
       case 'prev-concept':{const l=getConceptCollection(selectedConceptCategory);detail=(detail-1+l.length)%l.length;render();break;}
       case 'next-concept':{const l=getConceptCollection(selectedConceptCategory);detail=(detail+1)%l.length;render();break;}
       case 'practice-concept':{const pool=SAJU.questions.filter(q=>q.conceptIds.includes(action.dataset.concept));if(!pool.length){showToast('관련 문제는 준비 중입니다');break;}session={questions:pool.slice(0,10).map(shuffleQuestion),index:0,answers:[],correct:0,earned:0};route='study';render();break;}
-      case 'login-info':showToast('Firebase 설정 후 Google 로그인을 연결할 예정입니다');break;
+      case 'login-info':alert('로그인 모듈을 불러오지 못했습니다. 인터넷 연결을 확인하고 다시 접속해 주세요.');break;
       case 'admin':route='admin';render();break;
       case 'open-profile-form':route='my';myView='profile-form';render();break;
       case 'close-profile-form':myView='summary';render();break;
