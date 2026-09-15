@@ -89,6 +89,8 @@ main { min-height: calc(100vh - 130px); padding: 20px 18px 104px; outline: none;
 .path-state { color: var(--primary); font-size: 11px; font-weight: 800; }
 .study-head { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .icon-btn { flex: none; width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 12px; background: white; cursor: pointer; }
+.icon-btn:disabled { color: #aebdb9; background: #f6f8f6; cursor: default; }
+.study-back { color: var(--primary); font-size: 20px; }
 .study-progress { flex: 1; height: 7px; border-radius: 99px; background: var(--line); overflow: hidden; }
 .study-progress i { display: block; height: 100%; background: var(--primary); transition: width .25s; }
 .study-count { color: var(--muted); font-size: 12px; font-weight: 800; }
@@ -114,6 +116,7 @@ main { min-height: calc(100vh - 130px); padding: 20px 18px 104px; outline: none;
 .feedback-buttons { display: flex; gap: 8px; }
 .feedback-buttons button { min-width: 42px; height: 36px; border: 1px solid var(--line); border-radius: 11px; background: white; cursor: pointer; }
 .next-wrap { margin-top: 14px; }
+.next-wrap.with-previous { display: grid; grid-template-columns: 1fr 1.3fr; gap: 10px; }
 .complete { text-align: center; padding-top: 30px; }
 .complete-icon { width: 86px; height: 86px; margin: 0 auto 18px; display: grid; place-items: center; border-radius: 30px; background: var(--primary-soft); color: var(--primary); font-size: 42px; }
 .complete h2 { margin: 0 0 8px; }

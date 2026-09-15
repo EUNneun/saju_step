@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const STORAGE_KEY = 'sajustep-state-v1';
-  const APP_VERSION = '1.2.0';
+  const APP_VERSION = '1.2.1';
   const defaultState = {
     version: APP_VERSION, xp: 0, attempts: 0, correct: 0, streak: 0,
     conceptStats: {}, recentQuestionIds: [], feedback: [], history: [], lastStudyAt: null,
@@ -175,33 +175,34 @@
     return {...q, options:indexed.map(x=>x.option), answer:indexed.findIndex(x=>x.index===q.answer)};
   }
   function startStudy(options={}) {
-    session={questions:pickQuestions(options),index:0,answered:false,selected:null,correct:0,earned:0,startedAt:Date.now()};
+    session={questions:pickQuestions(options),index:0,answers:[],correct:0,earned:0,startedAt:Date.now()};
     route='study'; window.scrollTo(0,0); render();
   }
   function renderStudy() {
     if(!session || session.index>=session.questions.length) return renderComplete();
-    const q=session.questions[session.index];
+    const q=session.questions[session.index], selected=session.answers[session.index], answered=selected!==undefined;
     main.innerHTML=`
-      <div class="study-head"><button class="icon-btn" data-action="exit-study">✕</button><div class="study-progress"><i style="width:${(session.index/session.questions.length)*100}%"></i></div><span class="study-count">${session.index+1}/${session.questions.length}</span></div>
+      <div class="study-head"><button class="icon-btn" data-action="exit-study" aria-label="학습 종료">✕</button><button class="icon-btn study-back" data-action="previous" aria-label="이전 문제" ${session.index===0?'disabled':''}>←</button><div class="study-progress"><i style="width:${(session.index/session.questions.length)*100}%"></i></div><span class="study-count">${session.index+1}/${session.questions.length}</span></div>
       <section class="question"><span class="question-type">${q.type}</span><h2>${escapeHtml(q.question)}</h2>${q.context?`<div class="question-context">${formatQuestionContext(q.context)}</div>`:''}</section>
-      <div class="options">${q.options.map((o,i)=>`<button class="option ${session.answered?(i===q.answer?'correct':i===session.selected?'wrong':''):''}" data-answer="${i}" ${session.answered?'disabled':''}><span class="option-letter">${String.fromCharCode(65+i)}</span><span>${escapeHtml(o.text)}</span></button>`).join('')}</div>
-      ${session.answered?renderExplanation(q):''}`;
+      <div class="options">${q.options.map((o,i)=>`<button class="option ${answered?(i===q.answer?'correct':i===selected?'wrong':''):''}" data-answer="${i}" ${answered?'disabled':''}><span class="option-letter">${String.fromCharCode(65+i)}</span><span>${escapeHtml(o.text)}</span></button>`).join('')}</div>
+      ${answered?renderExplanation(q,selected):''}`;
   }
-  function renderExplanation(q) {
-    const isCorrect=session.selected===q.answer;
+  function renderExplanation(q, selected) {
+    const isCorrect=selected===q.answer;
     return `<section class="explanation">
       <div class="result-title"><b>${isCorrect?'✓ 정답입니다':'✕ 다시 구분해 볼까요?'}</b></div>
       <div class="ex-section"><b>핵심 의미</b><p>${escapeHtml(q.explanation.core)}</p></div>
       <div class="ex-section"><b>정답 근거</b><p>${escapeHtml(q.explanation.reason)}</p></div>
       <div class="ex-section"><b>보기 비교</b><p>${escapeHtml(q.explanation.compare)}</p></div>
       <div class="feedback-row"><span>이 해설은 어땠나요?</span><div class="feedback-buttons"><button data-feedback="needs" aria-label="해설 보완 필요">✎</button><button data-feedback="helpful" aria-label="좋은 해설">👍</button></div></div>
-      <div class="next-wrap"><button class="btn btn-primary" data-action="next">${session.index===session.questions.length-1?'결과 보기':'다음 문제'}</button></div>
+      <div class="next-wrap ${session.index>0?'with-previous':''}">${session.index>0?'<button class="btn btn-secondary" data-action="previous">이전 문제</button>':''}<button class="btn btn-primary" data-action="next">${session.index===session.questions.length-1?'결과 보기':'다음 문제'}</button></div>
     </section>`;
   }
   function answerQuestion(index) {
-    if(session.answered) return;
+    if(!session || session.answers[session.index]!==undefined || !Number.isInteger(index)) return;
     const q=session.questions[session.index], correct=index===q.answer;
-    session.answered=true; session.selected=index;
+    if(index<0 || index>=q.options.length) return;
+    session.answers[session.index]=index;
     state.attempts++; if(correct){state.correct++;state.streak++;session.correct++;session.earned+=10;state.xp+=10;}else{state.streak=0;session.earned+=2;state.xp+=2;}
     q.conceptIds.forEach(id=>{ const s=state.conceptStats[id] ||= {attempts:0,correct:0,streak:0}; s.attempts++; if(correct){s.correct++;s.streak++;}else{s.streak=0;} });
     state.history.push({questionId:q.id,category:q.category,correct,selected:q.options[index].text,answer:q.options[q.answer].text,at:new Date().toISOString()});
@@ -323,11 +324,12 @@
       case 'review':startStudy({review:true});break;
       case 'consult':startStudy({consult:true});break;
       case 'exit-study':setRoute('home');break;
-      case 'next':session.index++;session.answered=false;session.selected=null;window.scrollTo(0,0);renderStudy();break;
+      case 'previous':if(session&&session.index>0){session.index--;window.scrollTo(0,0);renderStudy();}break;
+      case 'next':if(session&&session.answers[session.index]!==undefined){session.index++;window.scrollTo(0,0);renderStudy();}break;
       case 'close-detail':detail=null;render();break;
       case 'prev-concept':{const l=getConceptCollection(selectedConceptCategory);detail=(detail-1+l.length)%l.length;render();break;}
       case 'next-concept':{const l=getConceptCollection(selectedConceptCategory);detail=(detail+1)%l.length;render();break;}
-      case 'practice-concept':{const pool=SAJU.questions.filter(q=>q.conceptIds.includes(action.dataset.concept));if(!pool.length){showToast('관련 문제는 준비 중입니다');break;}session={questions:pool.slice(0,10).map(shuffleQuestion),index:0,answered:false,selected:null,correct:0,earned:0};route='study';render();break;}
+      case 'practice-concept':{const pool=SAJU.questions.filter(q=>q.conceptIds.includes(action.dataset.concept));if(!pool.length){showToast('관련 문제는 준비 중입니다');break;}session={questions:pool.slice(0,10).map(shuffleQuestion),index:0,answers:[],correct:0,earned:0};route='study';render();break;}
       case 'login-info':showToast('Firebase 설정 후 Google 로그인을 연결할 예정입니다');break;
       case 'admin':route='admin';render();break;
       case 'open-profile-form':route='my';myView='profile-form';render();break;
