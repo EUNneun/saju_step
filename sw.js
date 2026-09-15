@@ -1,4 +1,4 @@
-const CACHE='sajustep-v1.3.0';
+const CACHE='sajustep-v1.3.1';
 const ASSETS=['./','index.html','styles.css','data.js','app.js','firebase-config.js','firebase-sync.js','manifest.json','icon.svg'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
