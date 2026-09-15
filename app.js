@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const STORAGE_KEY = 'sajustep-state-v1';
-  const APP_VERSION = '1.2.2';
+  const APP_VERSION = '1.2.3';
   const defaultState = {
     version: APP_VERSION, xp: 0, attempts: 0, correct: 0, streak: 0,
     conceptStats: {}, recentQuestionIds: [], feedback: [], history: [], lastStudyAt: null,
